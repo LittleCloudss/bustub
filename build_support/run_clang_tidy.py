@@ -282,7 +282,7 @@ def main():
     # specified in the command line, we only check files modified compared
     # with origin/master, so as to speed up clang-tidy check.
     #
-    # This functionality is set as CMake target `check-clang-tidy-diff`.
+    # This functionality is set as CMake target `recdiff`.
     # You can use `make check-clang-tidy-diff` to do a fast clang-tidy
     # check.
     if args.only_diff:

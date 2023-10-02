@@ -158,10 +158,9 @@ class TrieNode {
    */
   void RemoveChildNode(char key_char) {
     auto result = this->children_.find(key_char);
-    if (result == this->children_.end()) {
-      return;
+    if (result != this->children_.end()) {
+      this->children_.erase(result);
     }
-    this->children_.erase(result);
   }
 
   /**
