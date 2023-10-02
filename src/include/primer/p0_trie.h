@@ -315,6 +315,7 @@ class Trie {
       return false;
     }
     // LOG_INFO("Insert: add new key %s!\n", key.c_str());
+    assert(father != now);
     char last_key = key[key.length() - 1];
     std::unique_ptr<TrieNode> tmp = std::make_unique<TrieNodeWithValue<T>>(std::move(**now), value);
     (*father)->RemoveChildNode(last_key);
