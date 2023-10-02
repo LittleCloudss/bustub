@@ -37,6 +37,7 @@ auto LRUKReplacer::Evict(frame_id_t *frame_id) -> bool {
   int index = 0;
   std::chrono::nanoseconds max_duration = std::chrono::nanoseconds::min();
   TimePoint min_inf_timestamp = TimePoint::max();
+  TimePoint current_time = std::chrono::high_resolution_clock::now();
   for (size_t i = 0; i < replacer_size_; i++) {
     if (evictable_tag_[i]) {
       if (record_pair_[i].second.size() < k_) {
@@ -47,8 +48,8 @@ auto LRUKReplacer::Evict(frame_id_t *frame_id) -> bool {
         }
       } else {
         if (min_inf_timestamp == TimePoint::max()) {
-          if (max_duration < record_pair_[i].second.back() - record_pair_[i].second.front()) {
-            max_duration = record_pair_[i].second.back() - record_pair_[i].second.front();
+          if (max_duration < current_time - record_pair_[i].second.front()) {
+            max_duration = current_time - record_pair_[i].second.front();
             *frame_id = record_pair_[i].first;
             index = i;
           }
