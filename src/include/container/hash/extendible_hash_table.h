@@ -22,6 +22,7 @@
 #include <mutex>  // NOLINT
 #include <utility>
 #include <vector>
+#include "common/logger.h"
 
 #include "container/hash/hash_table.h"
 
