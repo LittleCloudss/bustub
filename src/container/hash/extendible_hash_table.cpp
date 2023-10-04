@@ -84,32 +84,40 @@ template <typename K, typename V>
 void ExtendibleHashTable<K, V>::Insert(const K &key, const V &value) {
   latch_.lock();
   // LOG_DEBUG("Insert %ld , index is %ld, dir size is %d", std::hash<K>()(key), IndexOf(key), (int)dir_.size());
-  std::shared_ptr<Bucket> bucket = dir_[IndexOf(key)];
-  if (bucket->Insert(key, value)) {
-    latch_.unlock();
-    return;
-  }
-  // LOG_DEBUG("No more space, local_depth = %d, global_depth = %d", bucket->GetDepth(), global_depth_);
-  if (bucket->GetDepth() == global_depth_) {
-    global_depth_++;
-    size_t size = dir_.size();
-    for (size_t i = 0; i < size; i++) {
-      dir_.push_back(dir_[i]);
+  while (true) {
+    std::shared_ptr<Bucket> bucket = dir_[IndexOf(key)];
+    if (bucket->Insert(key, value)) {
+      latch_.unlock();
+      return;
     }
-  }
-  // LOG_DEBUG("Double size");
-  bucket->IncrementDepth();
-  dir_[IndexOf(key)] = std::make_shared<Bucket>(bucket_size_, bucket->GetDepth());
-  num_buckets_++;
-  auto list = bucket->GetItems();
-  for (auto it = list.begin(); it != list.end(); ++it) {
-    if (IndexOf(it->first) == IndexOf(key)) {
-      dir_[IndexOf(key)]->Insert(it->first, it->second);
-      bucket->Remove(it->first);
+    // LOG_DEBUG("No more space, local_depth = %d, global_depth = %d", bucket->GetDepth(), global_depth_);
+    if (bucket->GetDepth() == global_depth_) {
+      global_depth_++;
+      size_t size = dir_.size();
+      for (size_t i = 0; i < size; i++) {
+        dir_.push_back(dir_[i]);
+      }
+    }
+    // LOG_DEBUG("Double size");
+    bucket->IncrementDepth();
+    dir_[IndexOf(key)] = std::make_shared<Bucket>(bucket_size_, bucket->GetDepth());
+    num_buckets_++;
+    for (size_t i = 0; i < dir_.size(); i++) {
+      if ((std::hash<size_t>()(i) & ((1 << bucket->GetDepth()) - 1)) ==
+          (std::hash<K>()(key) & ((1 << bucket->GetDepth()) - 1))) {
+        dir_[i] = dir_[IndexOf(key)];
+      }
+    }
+    auto list = bucket->GetItems();
+    for (auto it = list.begin(); it != list.end(); ++it) {
+      if ((std::hash<K>()(it->first) & ((1 << bucket->GetDepth()) - 1)) ==
+          (std::hash<K>()(key) & ((1 << bucket->GetDepth()) - 1))) {
+        dir_[IndexOf(key)]->Insert(it->first, it->second);
+        bucket->Remove(it->first);
+      }
     }
   }
   latch_.unlock();
-  Insert(key, value);
 }
 
 //===--------------------------------------------------------------------===//

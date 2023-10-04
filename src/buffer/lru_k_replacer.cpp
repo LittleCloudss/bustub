@@ -69,6 +69,7 @@ auto LRUKReplacer::Evict(frame_id_t *frame_id) -> bool {
 }
 
 void LRUKReplacer::RecordAccess(frame_id_t frame_id) {
+  BUSTUB_ASSERT((size_t)frame_id < replacer_size_, "frame id is invalid");
   latch_.lock();
   bool flag = false;
   TimePoint current_time = std::chrono::high_resolution_clock::now();
@@ -88,19 +89,17 @@ void LRUKReplacer::RecordAccess(frame_id_t frame_id) {
       if (record_pair_[i].first == -1) {
         record_pair_[i].first = frame_id;
         record_pair_[i].second.push_back(current_time);
-        flag = true;
         break;
       }
     }
   }
-  BUSTUB_ASSERT(flag, "frame id is invalid");
   latch_.unlock();
 }
 
 void LRUKReplacer::SetEvictable(frame_id_t frame_id, bool set_evictable) {
   latch_.lock();
   // LOG_DEBUG("before set curr_size_ is %d", (int)curr_size_);
-  bool flag = false;
+  BUSTUB_ASSERT((size_t)frame_id < replacer_size_, "frame id is invalid");
   for (size_t i = 0; i < replacer_size_; i++) {
     if (record_pair_[i].first == frame_id) {
       if (evictable_tag_[i] && !set_evictable) {
@@ -109,11 +108,9 @@ void LRUKReplacer::SetEvictable(frame_id_t frame_id, bool set_evictable) {
         curr_size_++;
       }
       evictable_tag_[i] = set_evictable;
-      flag = true;
     }
   }
   // LOG_DEBUG("curr_size_ is %d", (int)curr_size_);
-  BUSTUB_ASSERT(flag, "frame id is invalid");
   latch_.unlock();
 }
 
