@@ -40,16 +40,48 @@ class BPlusTree {
 
  public:
   explicit BPlusTree(std::string name, BufferPoolManager *buffer_pool_manager, const KeyComparator &comparator,
-                     int leaf_max_size = LEAF_PAGE_SIZE, int internal_max_size = INTERNAL_PAGE_SIZE);
+                     int leaf_max_size = LEAF_PAGE_SIZE, int internal_max_size = INTERNAL_PAGE_SIZE, int pair_num = 0);
 
   // Returns true if this B+ tree has no keys and values.
   auto IsEmpty() const -> bool;
+
+  auto GetLeafPage(const KeyType &key) -> LeafPage *;
+
+  auto FindInLeaf(LeafPage *leaf_page, const KeyType &key, std::vector<ValueType> *result) -> bool;
+
+  auto InsertInLeaf(LeafPage *leaf_page, const KeyType &key, const ValueType &value) -> int;
+
+  void UpdateNextPage(page_id_t parent_id, const KeyType &key, page_id_t l_id);
+
+  void SplitInLeaf(LeafPage *leaf_page);
+
+  void SplitInInter(InternalPage *parent, const KeyType &key, page_id_t L_id, page_id_t R_id);
+
+  void InsertInInter(page_id_t parent_id, const KeyType &key, page_id_t L_id, page_id_t R_id);
+
+  auto DeleteInLeaf(LeafPage *leaf_page, const KeyType &key) -> bool;
+
+  auto BorrowFromLeft(BPlusTreePage *now_page) -> bool;
+
+  auto BorrowFromRight(BPlusTreePage *now_page) -> bool;
+
+  auto GetKeyFromParent(InternalPage *parent, const KeyType &key) -> KeyType;
+
+  void DeleteInInter(InternalPage *parent, const KeyType &key);
+
+  void Merge(BPlusTreePage *now_page);
+
+  auto MergeToLeft(BPlusTreePage *now_page) -> bool;
+
+  auto MergeToRight(BPlusTreePage *now_page) -> bool;
 
   // Insert a key-value pair into this B+ tree.
   auto Insert(const KeyType &key, const ValueType &value, Transaction *transaction = nullptr) -> bool;
 
   // Remove a key and its value from this B+ tree.
   void Remove(const KeyType &key, Transaction *transaction = nullptr);
+
+  void CheckPageClear();
 
   // return the value associated with a given key
   auto GetValue(const KeyType &key, std::vector<ValueType> *result, Transaction *transaction = nullptr) -> bool;
@@ -89,6 +121,8 @@ class BPlusTree {
   KeyComparator comparator_;
   int leaf_max_size_;
   int internal_max_size_;
+
+  int pair_num_;
 };
 
 }  // namespace bustub
