@@ -23,7 +23,7 @@ BufferPoolManagerInstance::BufferPoolManagerInstance(size_t pool_size, DiskManag
   // we allocate a consecutive memory space for the buffer pool
   pages_ = new Page[pool_size_];
   page_table_ = new ExtendibleHashTable<page_id_t, frame_id_t>(bucket_size_);
-  replacer_ = new LRUKReplacer(pool_size, replacer_k);
+  replacer_ = new LRUKReplacer(pool_size_, replacer_k);
 
   // Initially, every page is in the free list.
   for (size_t i = 0; i < pool_size_; ++i) {
@@ -87,7 +87,9 @@ auto BufferPoolManagerInstance::FetchPgImp(page_id_t page_id) -> Page * {
     pages_[free_frame].is_dirty_ = false;
     pages_[free_frame].page_id_ = page_id;
     pages_[free_frame].pin_count_ = 1;
+    // pages_[free_frame].WLatch();
     disk_manager_->ReadPage(page_id, pages_[free_frame].GetData());
+    // pages_[free_frame].WUnlatch();
     replacer_->RecordAccess(free_frame);
     replacer_->SetEvictable(free_frame, false);
     return &pages_[free_frame];
@@ -98,13 +100,17 @@ auto BufferPoolManagerInstance::FetchPgImp(page_id_t page_id) -> Page * {
   }
   page_table_->Remove(pages_[ret].GetPageId());
   if (pages_[ret].IsDirty()) {
+    // pages_[ret].RLatch();
     disk_manager_->WritePage(pages_[ret].GetPageId(), pages_[ret].GetData());
+    // pages_[ret].RUnlatch();
   }
   page_table_->Insert(page_id, ret);
   pages_[ret].is_dirty_ = false;
   pages_[ret].page_id_ = page_id;
   pages_[ret].pin_count_ = 1;
+  // pages_[ret].WLatch();
   disk_manager_->ReadPage(page_id, pages_[ret].GetData());
+  // pages_[ret].WUnlatch();
   replacer_->RecordAccess(ret);
   replacer_->SetEvictable(ret, false);
   return &pages_[ret];
@@ -119,7 +125,9 @@ auto BufferPoolManagerInstance::UnpinPgImp(page_id_t page_id, bool is_dirty) -> 
     }
     pages_[buffer_ret].pin_count_--;
     if (pages_[buffer_ret].pin_count_ == 0) {
+      // pages_[buffer_ret].WLatch();
       replacer_->SetEvictable(buffer_ret, true);
+      // pages_[buffer_ret].WUnlatch();
     }
     if (!pages_[buffer_ret].is_dirty_) {
       pages_[buffer_ret].is_dirty_ = is_dirty;
@@ -160,6 +168,7 @@ auto BufferPoolManagerInstance::DeletePgImp(page_id_t page_id) -> bool {
   frame_id_t buffer_ret;
   if (page_table_->Find(page_id, buffer_ret)) {
     if (pages_[buffer_ret].pin_count_ != 0) {
+      replacer_->SetEvictable(buffer_ret, true);
       return false;
     }
     replacer_->Remove(buffer_ret);

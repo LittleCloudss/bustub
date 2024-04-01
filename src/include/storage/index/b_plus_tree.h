@@ -11,6 +11,7 @@
 #pragma once
 
 #include <queue>
+#include <stack>
 #include <string>
 #include <vector>
 
@@ -40,40 +41,44 @@ class BPlusTree {
 
  public:
   explicit BPlusTree(std::string name, BufferPoolManager *buffer_pool_manager, const KeyComparator &comparator,
-                     int leaf_max_size = LEAF_PAGE_SIZE, int internal_max_size = INTERNAL_PAGE_SIZE, int pair_num = 0);
+                     int leaf_max_size = LEAF_PAGE_SIZE, int internal_max_size = INTERNAL_PAGE_SIZE);
 
   // Returns true if this B+ tree has no keys and values.
   auto IsEmpty() const -> bool;
 
-  auto GetLeafPage(const KeyType &key) -> LeafPage *;
+  auto CheckLockExist(page_id_t want, Transaction *transaction) -> bool;
+
+  void ClearAncestorLock(Page *now, Transaction *transaction = nullptr);
+
+  void PrintAncestorLock(Transaction *transaction);
+
+  void ClearLock(Transaction *transaction = nullptr);
+
+  auto GetLeafPage(const KeyType &key, int type, Transaction *transaction = nullptr) -> Page *;
 
   auto FindInLeaf(LeafPage *leaf_page, const KeyType &key, std::vector<ValueType> *result) -> bool;
 
   auto InsertInLeaf(LeafPage *leaf_page, const KeyType &key, const ValueType &value) -> int;
 
-  void UpdateNextPage(page_id_t parent_id, const KeyType &key, page_id_t l_id);
+  void SplitInLeaf(LeafPage *leaf_page, Transaction *transaction);
 
-  void SplitInLeaf(LeafPage *leaf_page);
+  void SplitInInter(InternalPage *parent, const KeyType &key, page_id_t L_id, page_id_t R_id, Transaction *transaction);
 
-  void SplitInInter(InternalPage *parent, const KeyType &key, page_id_t L_id, page_id_t R_id);
+  void InsertInInter(page_id_t parent_id, const KeyType &key, page_id_t L_id, page_id_t R_id, Transaction *transaction);
 
-  void InsertInInter(page_id_t parent_id, const KeyType &key, page_id_t L_id, page_id_t R_id);
+  auto DeleteInLeaf(LeafPage *leaf_page, const KeyType &key, Transaction *transaction) -> bool;
 
-  auto DeleteInLeaf(LeafPage *leaf_page, const KeyType &key) -> bool;
+  auto BorrowFromLeft(BPlusTreePage *now_page, Transaction *transaction) -> bool;
 
-  auto BorrowFromLeft(BPlusTreePage *now_page) -> bool;
+  auto BorrowFromRight(BPlusTreePage *now_page, Transaction *transaction) -> bool;
 
-  auto BorrowFromRight(BPlusTreePage *now_page) -> bool;
+  void DeleteInInter(InternalPage *parent, int pos, Transaction *transaction);
 
-  auto GetKeyFromParent(InternalPage *parent, const KeyType &key) -> KeyType;
+  void Merge(BPlusTreePage *now_page, Transaction *transaction);
 
-  void DeleteInInter(InternalPage *parent, const KeyType &key);
+  auto MergeToLeft(BPlusTreePage *now_page, Transaction *transaction) -> bool;
 
-  void Merge(BPlusTreePage *now_page);
-
-  auto MergeToLeft(BPlusTreePage *now_page) -> bool;
-
-  auto MergeToRight(BPlusTreePage *now_page) -> bool;
+  auto MergeToRight(BPlusTreePage *now_page, Transaction *transaction) -> bool;
 
   // Insert a key-value pair into this B+ tree.
   auto Insert(const KeyType &key, const ValueType &value, Transaction *transaction = nullptr) -> bool;
@@ -121,8 +126,7 @@ class BPlusTree {
   KeyComparator comparator_;
   int leaf_max_size_;
   int internal_max_size_;
-
-  int pair_num_;
+  std::mutex root_lock_;
 };
 
 }  // namespace bustub

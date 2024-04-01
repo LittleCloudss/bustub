@@ -52,6 +52,7 @@ class BPlusTreeLeafPage : public BPlusTreePage {
   void SetKeyAt(int index, const KeyType &key);
   auto ValueAt(int index) const -> ValueType;
   void SetValueAt(int index, const ValueType &value);
+  auto PairAt(int index) -> MappingType &;
 
  private:
   page_id_t next_page_id_;
