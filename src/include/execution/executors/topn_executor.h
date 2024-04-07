@@ -49,8 +49,13 @@ class TopNExecutor : public AbstractExecutor {
   /** @return The output schema for the topn */
   auto GetOutputSchema() const -> const Schema & override { return plan_->OutputSchema(); }
 
+  auto Cmp(const Tuple *tuple1, const Tuple *tuple2) -> bool;
+
  private:
   /** The topn plan node to be executed */
   const TopNPlanNode *plan_;
+  std::unique_ptr<AbstractExecutor> child_executor_;
+  std::vector<Tuple> result_{};
+  uint32_t pos_{0};
 };
 }  // namespace bustub
