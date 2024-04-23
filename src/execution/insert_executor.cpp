@@ -22,18 +22,16 @@ InsertExecutor::InsertExecutor(ExecutorContext *exec_ctx, const InsertPlanNode *
 
 void InsertExecutor::Init() {
   child_executor_->Init();
-  auto table = this->GetExecutorContext()->GetCatalog()->GetTable(plan_->TableOid());
-  auto index_vector = this->GetExecutorContext()->GetCatalog()->GetTableIndexes(table->name_);
-  Tuple tuple;
-  RID rid;
-  while (child_executor_->Next(&tuple, &rid)) {
-    if (!table->table_->InsertTuple(tuple, &rid, this->exec_ctx_->GetTransaction())) {
-      continue;
-    }
-    insert_num_++;
-    for (auto index : index_vector) {
-      index->index_->InsertEntry(tuple.KeyFromTuple(table->schema_, index->key_schema_, index->index_->GetKeyAttrs()),
-                                 rid, this->exec_ctx_->GetTransaction());
+  if (!this->GetExecutorContext()->GetTransaction()->IsTableExclusiveLocked(plan_->TableOid()) &&
+      !this->GetExecutorContext()->GetTransaction()->IsTableSharedIntentionExclusiveLocked(plan_->TableOid())) {
+    try {
+      bool ret = this->GetExecutorContext()->GetLockManager()->LockTable(
+          this->GetExecutorContext()->GetTransaction(), LockManager::LockMode::INTENTION_EXCLUSIVE, plan_->TableOid());
+      if (!ret) {
+        throw ExecutionException("Insert can't get table lock");
+      }
+    } catch (TransactionAbortException &e) {
+      throw ExecutionException("Insert can't get table lock because transaction abort." + e.GetInfo());
     }
   }
 }
@@ -41,6 +39,33 @@ void InsertExecutor::Init() {
 auto InsertExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
   if (returned_) {
     return false;
+  }
+  auto table = this->GetExecutorContext()->GetCatalog()->GetTable(plan_->TableOid());
+  auto index_vector = this->GetExecutorContext()->GetCatalog()->GetTableIndexes(table->name_);
+  Tuple tmp_tuple;
+  RID tmp_rid;
+  while (child_executor_->Next(&tmp_tuple, &tmp_rid)) {
+    if (!table->table_->InsertTuple(tmp_tuple, &tmp_rid, this->exec_ctx_->GetTransaction())) {
+      continue;
+    }
+    try {
+      bool ret = this->GetExecutorContext()->GetLockManager()->LockRow(
+          this->GetExecutorContext()->GetTransaction(), LockManager::LockMode::EXCLUSIVE, plan_->TableOid(), tmp_rid);
+      if (!ret) {
+        throw ExecutionException("Insert can't get row lock");
+      }
+    } catch (TransactionAbortException &e) {
+      throw ExecutionException("Insert can't get row lock because transaction abort." + e.GetInfo());
+    }
+
+    insert_num_++;
+    for (auto index : index_vector) {
+      index->index_->InsertEntry(
+          tmp_tuple.KeyFromTuple(table->schema_, index->key_schema_, index->index_->GetKeyAttrs()), tmp_rid,
+          this->exec_ctx_->GetTransaction());
+      this->GetExecutorContext()->GetTransaction()->GetIndexWriteSet()->emplace_back(
+          tmp_rid, table->oid_, WType::INSERT, tmp_tuple, index->index_oid_, this->exec_ctx_->GetCatalog());
+    }
   }
   std::vector<Value> values;
   values.reserve(1);

@@ -64,7 +64,7 @@ class LockManager {
   class LockRequestQueue {
    public:
     /** List of lock requests for the same resource (table or row) */
-    std::list<LockRequest *> request_queue_;
+    std::list<std::shared_ptr<LockRequest>> request_queue_;
     /** For notifying blocked transactions on this rid */
     std::condition_variable cv_;
     /** txn_id of an upgrading transaction (if any) */
@@ -297,6 +297,16 @@ class LockManager {
    */
   auto RunCycleDetection() -> void;
 
+  auto MaintainTableSetState(Transaction *txn, LockMode lock_mode, const table_oid_t &oid, bool is_insert) -> void;
+
+  auto MaintainRowSetState(Transaction *txn, LockMode lock_mode, const table_oid_t &oid, const RID &rid, bool is_insert)
+      -> void;
+
+  auto GrantLock(const std::list<std::shared_ptr<LockRequest>> &request_queue_,
+                 const std::shared_ptr<LockRequest> &new_request) -> bool;
+
+  auto Dfs(txn_id_t now, txn_id_t *max_tid) -> bool;
+
  private:
   /** Fall 2022 */
   /** Structure that holds lock requests for a given table oid */
@@ -314,6 +324,8 @@ class LockManager {
   /** Waits-for graph representation. */
   std::unordered_map<txn_id_t, std::vector<txn_id_t>> waits_for_;
   std::mutex waits_for_latch_;
+  std::vector<txn_id_t> vertex_;
+  std::unordered_map<txn_id_t, bool> tags_;
 };
 
 }  // namespace bustub
